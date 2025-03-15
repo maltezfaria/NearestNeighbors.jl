@@ -1,4 +1,10 @@
-check_radius(r) = r < 0 && throw(ArgumentError("the query radius r must be ≧ 0"))
+check_radius(r::Number, args...) = r < 0 && throw(ArgumentError("the query radius r must be ≧ 0"))
+
+function check_radius(r::AbstractVector{<:Number}, pts)
+    msg = "the query radius r must either be a scalar or have the same length as the points"
+    length(r) == length(pts) || throw(ArgumentError(msg))
+    foreach(r -> check_radius(r, pts), r)
+end
 
 """
     inrange(tree::NNTree, points, radius [, sortres=false]) -> indices
@@ -9,16 +15,17 @@ Find all the points in the tree which is closer than `radius` to `points`. If
 See also: `inrange!`, `inrangecount`.
 """
 function inrange(tree::NNTree,
-                 points::AbstractVector{T},
-                 radius::Number,
-                 sortres=false) where {T <: AbstractVector}
+    points::AbstractVector{T},
+    radius::Union{Number,AbstractVector{<:Number}},
+    sortres=false) where {T<:AbstractVector}
     check_input(tree, points)
-    check_radius(radius)
+    check_radius(radius, points)
 
     idxs = [Vector{Int}() for _ in 1:length(points)]
 
     for i in 1:length(points)
-        inrange_point!(tree, points[i], radius, sortres, idxs[i])
+        r = radius isa Number ? radius : radius[i]
+        inrange_point!(tree, points[i], r, sortres, idxs[i])
     end
     return idxs
 end
@@ -44,7 +51,7 @@ Useful if one want to avoid allocations or specify the element type of the outpu
 
 See also: `inrange`, `inrangecount`.
 """
-function inrange!(idxs::AbstractVector, tree::NNTree{V}, point::AbstractVector{T}, radius::Number, sortres=false) where {V, T <: Number}
+function inrange!(idxs::AbstractVector, tree::NNTree{V}, point::AbstractVector{T}, radius::Number, sortres=false) where {V,T<:Number}
     check_input(tree, point)
     check_radius(radius)
     length(idxs) == 0 || throw(ArgumentError("idxs must be empty"))
@@ -52,16 +59,16 @@ function inrange!(idxs::AbstractVector, tree::NNTree{V}, point::AbstractVector{T
     return idxs
 end
 
-function inrange(tree::NNTree{V}, point::AbstractVector{T}, radius::Number, sortres=false) where {V, T <: Number}
+function inrange(tree::NNTree{V}, point::AbstractVector{T}, radius::Number, sortres=false) where {V,T<:Number}
     return inrange!(Int[], tree, point, radius, sortres)
 end
 
-function inrange(tree::NNTree{V}, points::AbstractMatrix{T}, radius::Number, sortres=false) where {V, T <: Number}
+function inrange(tree::NNTree{V}, points::AbstractMatrix{T}, radius::Number, sortres=false) where {V,T<:Number}
     dim = size(points, 1)
     inrange_matrix(tree, points, radius, Val(dim), sortres)
 end
 
-function inrange_matrix(tree::NNTree{V}, points::AbstractMatrix{T}, radius::Number, ::Val{dim}, sortres) where {V, T <: Number, dim}
+function inrange_matrix(tree::NNTree{V}, points::AbstractMatrix{T}, radius::Number, ::Val{dim}, sortres) where {V,T<:Number,dim}
     # TODO: DRY with inrange for AbstractVector
     check_input(tree, points)
     check_radius(radius)
@@ -80,21 +87,21 @@ end
 
 Count all the points in the tree which are closer than `radius` to `points`.
 """
-function inrangecount(tree::NNTree{V}, point::AbstractVector{T}, radius::Number) where {V, T <: Number}
+function inrangecount(tree::NNTree{V}, point::AbstractVector{T}, radius::Number) where {V,T<:Number}
     check_input(tree, point)
     check_radius(radius)
     return inrange_point!(tree, point, radius, false, nothing)
 end
 
 function inrangecount(tree::NNTree,
-        points::AbstractVector{T},
-        radius::Number) where {T <: AbstractVector}
+    points::AbstractVector{T},
+    radius::Number) where {T<:AbstractVector}
     check_input(tree, points)
     check_radius(radius)
     return inrange_point!.(Ref(tree), points, radius, false, nothing)
 end
 
-function inrangecount(tree::NNTree{V}, point::AbstractMatrix{T}, radius::Number) where {V, T <: Number}
+function inrangecount(tree::NNTree{V}, point::AbstractMatrix{T}, radius::Number) where {V,T<:Number}
     dim = size(point, 1)
     npoints = size(point, 2)
     if isbitstype(T)

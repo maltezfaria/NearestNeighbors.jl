@@ -23,17 +23,17 @@
 
                 X = [0.0 0.0; 0.0 0.0; 0.5 0.0]
                 idxs1 = inrange(tree, X, 0.6, dosort)
-                idxs2 = inrange(tree, view(X,:,1:2), 0.6, dosort)
+                idxs2 = inrange(tree, view(X, :, 1:2), 0.6, dosort)
                 @test idxs1 == idxs2
-                @test idxs1[1] == [1,2]
+                @test idxs1[1] == [1, 2]
                 @test idxs1[2] == [1]
                 counts1 = inrangecount(tree, X, 0.6)
-                counts2 = inrangecount(tree, view(X,:,1:2), 0.6)
+                counts2 = inrangecount(tree, view(X, :, 1:2), 0.6)
                 @test counts1 == counts2
                 @test counts1 == [2, 1]
 
                 idxs = inrange(tree, [SVector{3,Float64}(0.0, 0.0, 0.5), SVector{3,Float64}(0.0, 0.0, 0.0)], 0.6, dosort)
-                @test idxs[1] == [1,2]
+                @test idxs[1] == [1, 2]
                 @test idxs[2] == [1]
                 counts = inrangecount(tree, [SVector{3,Float64}(0.0, 0.0, 0.5), SVector{3,Float64}(0.0, 0.0, 0.0)], 0.6)
                 @test counts == [2, 1]
@@ -56,7 +56,7 @@
                 @test_throws ArgumentError inrange(tree, rand(3), -0.1)
                 @test_throws ArgumentError inrange(tree, rand(5), 1.0)
 
-                empty_tree = TreeType(rand(3,0), metric)
+                empty_tree = TreeType(rand(3, 0), metric)
                 idxs = inrange(empty_tree, [0.5, 0.5, 0.5], 1.0)
                 @test idxs == []
                 counts = inrangecount(empty_tree, [0.5, 0.5, 0.5], 1.0)
@@ -69,8 +69,8 @@
                 @test counts == repeat([1], size(data, 2))
             end
             data = [0.0 0.0 0.0 0.0 1.0 1.0 1.0 1.0;
-                    0.0 0.0 1.0 1.0 0.0 0.0 1.0 1.0;
-                    0.0 1.0 0.0 1.0 0.0 1.0 0.0 1.0] # 8 node cube
+                0.0 0.0 1.0 1.0 0.0 0.0 1.0 1.0;
+                0.0 1.0 0.0 1.0 0.0 1.0 0.0 1.0] # 8 node cube
             test(data)
             test(view(data, :, :))
         end
@@ -78,7 +78,7 @@
 end
 
 @testset "view" begin
-    points = rand(SVector{3, Float64}, 100)
+    points = rand(SVector{3,Float64}, 100)
     kdtree = KDTree(points)
     idxs = inrange(kdtree, view(points, 1:10), 0.1)
     @test idxs isa Vector{Vector{Int}}
@@ -91,5 +91,30 @@ end
         inrange!(idxs, data, [0.5, 0.5, 0.5], 1.0)
         idxs2 = inrange(data, [0.5, 0.5, 0.5], 3)
         @test idxs == idxs2
+    end
+end
+
+@testset "variable radii" begin
+    for T in (KDTree, BallTree, BruteTree)
+        # Define points forming a square in 2D space
+        # (0,1) ---- (1,1)
+        #   |          |
+        # (0,0) ---- (1,0)
+        # ordered as [bottom left, bottom right, top right, top left]
+        pts = [SVector(0.0, 0.0), SVector(1.0, 0.0), SVector(1.0, 1.0), SVector(0.0, 1.0)]
+        data = T(pts)
+        # pick a distance larger than edge length but smaller than diagonal, so three point
+        # in range for each point
+        dist = 1.25
+        idxs = inrange(data, pts, dist)
+        @test all(length(idx) == 3 for idx in idxs)
+        # now pick a non-uniform distance [0.5, 1.25, 1.5, 10] so that first point has 1
+        # point in range, second has 3, third has 3, and fourth has 4
+        dist = [0.5, 1.25, 1.25, 10]
+        idxs = inrange(data, pts, dist)
+        @test idxs[1] == [1]
+        @test idxs[2] == [1, 2, 3]
+        @test idxs[3] == [2, 3, 4]
+        @test idxs[4] == [1, 2, 3, 4]
     end
 end
